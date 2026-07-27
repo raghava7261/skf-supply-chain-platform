@@ -344,20 +344,6 @@ curl http://localhost:8084/api/v1/notifications
 
 ---
 
-## Roadmap (still open)
-
-- **API Gateway** (Spring Cloud Gateway) — single entry point, centralized JWT validation, rate limiting
-- **AI Demand Forecasting** — time-series model consuming `STOCK_UPDATED` history to predict reorder points proactively
-- **OAuth2 everywhere** — only `purchase-order-service` validates JWTs today; the same pattern needs replicating onto the other five services
-- **Barcode/QR image generation** — `warehouse-ops-service` validates a scanned code against the SKU, but doesn't yet generate/render actual barcode/QR images
-- **AWS deployment** — ECS/EKS, MSK, ElastiCache, RDS, Terraform for IaC
-- **Dead-letter topics** — Kafka listeners currently log-and-drop on failure; production needs a DLQ + reconciliation process
-- **Service discovery** — Eureka or Consul once the service count grows
-- **Shipment ↔ PO auto-linking** — shipments aren't yet auto-created when a PO is approved; currently a manual step
-
-## Resume Bullet (draft)
-
-> Designed and built a 7-microservice, event-driven supply chain platform (Spring Boot, Kafka, Redis, Postgres, Keycloak/OAuth2, Docker) — automated purchase-order generation from real-time low-stock events, built a barcode-scan-validated warehouse task workflow with automated shipment delay detection, and shipped a live WebSocket dashboard for real-time operational visibility across inventory, procurement, warehouse ops, and shipments.
 
 ---
 
