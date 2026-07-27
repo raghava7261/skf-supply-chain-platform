@@ -1,0 +1,252 @@
+networks:
+  scm-network:
+    driver: bridge
+
+volumes:
+  postgres-data:
+  kafka-data:
+
+services:
+
+  # ---------- Infrastructure ----------
+
+  postgres:
+    image: postgres:16-alpine
+    container_name: scm-postgres
+    environment:
+      POSTGRES_USER: scm_user
+      POSTGRES_PASSWORD: scm_pass
+      POSTGRES_MULTIPLE_DATABASES: supplier_db,inventory_db,po_db,warehouse_db,shipment_db,keycloak_db
+    volumes:
+      - postgres-data:/var/lib/postgresql/data
+      - ./infra/postgres-init-multi-db.sh:/docker-entrypoint-initdb.d/init-multi-db.sh
+    ports:
+      - "5432:5432"
+    networks:
+      - scm-network
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U scm_user"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  redis:
+    image: redis:7-alpine
+    container_name: scm-redis
+    ports:
+      - "6379:6379"
+    networks:
+      - scm-network
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  zookeeper:
+    image: confluentinc/cp-zookeeper:7.6.1
+    container_name: scm-zookeeper
+    environment:
+      ZOOKEEPER_CLIENT_PORT: 2181
+      ZOOKEEPER_TICK_TIME: 2000
+    networks:
+      - scm-network
+
+  kafka:
+    image: confluentinc/cp-kafka:7.6.1
+    container_name: scm-kafka
+    depends_on:
+      - zookeeper
+    environment:
+      KAFKA_BROKER_ID: 1
+      KAFKA_ZOOKEEPER_CONNECT: zookeeper:2181
+      KAFKA_ADVERTISED_LISTENERS: PLAINTEXT://kafka:29092,PLAINTEXT_HOST://localhost:9092
+      KAFKA_LISTENER_SECURITY_PROTOCOL_MAP: PLAINTEXT:PLAINTEXT,PLAINTEXT_HOST:PLAINTEXT
+      KAFKA_INTER_BROKER_LISTENER_NAME: PLAINTEXT
+      KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR: 1
+      KAFKA_AUTO_CREATE_TOPICS_ENABLE: "true"
+    ports:
+      - "9092:9092"
+    volumes:
+      - kafka-data:/var/lib/kafka/data
+    networks:
+      - scm-network
+    healthcheck:
+      test: ["CMD", "kafka-topics", "--bootstrap-server", "localhost:9092", "--list"]
+      interval: 10s
+      timeout: 10s
+      retries: 10
+
+  kafdrop:
+    image: obsidiandynamics/kafdrop:latest
+    container_name: scm-kafdrop
+    depends_on:
+      - kafka
+    environment:
+      KAFKA_BROKERCONNECT: kafka:29092
+      JVM_OPTS: "-Xms32M -Xmx64M"
+    ports:
+      - "9000:9000"
+    networks:
+      - scm-network
+
+  keycloak:
+    image: quay.io/keycloak/keycloak:25.0
+    container_name: scm-keycloak
+    command: start-dev --import-realm
+    depends_on:
+      postgres:
+        condition: service_healthy
+    environment:
+      KEYCLOAK_ADMIN: admin
+      KEYCLOAK_ADMIN_PASSWORD: admin
+      KC_DB: postgres
+      KC_DB_URL: jdbc:postgresql://postgres:5432/keycloak_db
+      KC_DB_USERNAME: scm_user
+      KC_DB_PASSWORD: scm_pass
+      KC_HTTP_PORT: 8090
+    volumes:
+      - ./infra/keycloak/scm-realm.json:/opt/keycloak/data/import/scm-realm.json
+    ports:
+      - "8090:8090"
+    networks:
+      - scm-network
+
+  # ---------- Application services ----------
+
+  supplier-service:
+    build:
+      context: .
+      dockerfile: supplier-service/Dockerfile
+    container_name: scm-supplier-service
+    depends_on:
+      postgres:
+        condition: service_healthy
+      kafka:
+        condition: service_healthy
+    environment:
+      DB_HOST: postgres
+      DB_PORT: 5432
+      DB_USER: scm_user
+      DB_PASSWORD: scm_pass
+      KAFKA_BOOTSTRAP_SERVERS: kafka:29092
+    ports:
+      - "8081:8081"
+    networks:
+      - scm-network
+
+  inventory-service:
+    build:
+      context: .
+      dockerfile: inventory-service/Dockerfile
+    container_name: scm-inventory-service
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      kafka:
+        condition: service_healthy
+    environment:
+      DB_HOST: postgres
+      DB_PORT: 5432
+      DB_USER: scm_user
+      DB_PASSWORD: scm_pass
+      REDIS_HOST: redis
+      REDIS_PORT: 6379
+      KAFKA_BOOTSTRAP_SERVERS: kafka:29092
+    ports:
+      - "8082:8082"
+    networks:
+      - scm-network
+
+  purchase-order-service:
+    build:
+      context: .
+      dockerfile: purchase-order-service/Dockerfile
+    container_name: scm-purchase-order-service
+    depends_on:
+      postgres:
+        condition: service_healthy
+      kafka:
+        condition: service_healthy
+      keycloak:
+        condition: service_started
+    environment:
+      DB_HOST: postgres
+      DB_PORT: 5432
+      DB_USER: scm_user
+      DB_PASSWORD: scm_pass
+      KAFKA_BOOTSTRAP_SERVERS: kafka:29092
+      KEYCLOAK_ISSUER_URI: http://keycloak:8090/realms/scm-realm
+    ports:
+      - "8083:8083"
+    networks:
+      - scm-network
+
+  warehouse-ops-service:
+    build:
+      context: .
+      dockerfile: warehouse-ops-service/Dockerfile
+    container_name: scm-warehouse-ops-service
+    depends_on:
+      postgres:
+        condition: service_healthy
+      kafka:
+        condition: service_healthy
+    environment:
+      DB_HOST: postgres
+      DB_PORT: 5432
+      DB_USER: scm_user
+      DB_PASSWORD: scm_pass
+      KAFKA_BOOTSTRAP_SERVERS: kafka:29092
+    ports:
+      - "8085:8085"
+    networks:
+      - scm-network
+
+  shipment-service:
+    build:
+      context: .
+      dockerfile: shipment-service/Dockerfile
+    container_name: scm-shipment-service
+    depends_on:
+      postgres:
+        condition: service_healthy
+      kafka:
+        condition: service_healthy
+    environment:
+      DB_HOST: postgres
+      DB_PORT: 5432
+      DB_USER: scm_user
+      DB_PASSWORD: scm_pass
+      KAFKA_BOOTSTRAP_SERVERS: kafka:29092
+    ports:
+      - "8086:8086"
+    networks:
+      - scm-network
+
+  notification-service:
+    build:
+      context: .
+      dockerfile: notification-service/Dockerfile
+    container_name: scm-notification-service
+    depends_on:
+      kafka:
+        condition: service_healthy
+    environment:
+      KAFKA_BOOTSTRAP_SERVERS: kafka:29092
+    ports:
+      - "8084:8084"
+    networks:
+      - scm-network
+
+  dashboard:
+    build:
+      context: ./dashboard
+      dockerfile: Dockerfile
+    container_name: scm-dashboard
+    ports:
+      - "8087:80"
+    networks:
+      - scm-network

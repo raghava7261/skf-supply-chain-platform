@@ -1,0 +1,55 @@
+{
+  "realm": "scm-realm",
+  "enabled": true,
+  "accessTokenLifespan": 3600,
+  "roles": {
+    "realm": [
+      { "name": "PROCUREMENT_MANAGER", "description": "Can approve and cancel purchase orders" },
+      { "name": "WAREHOUSE_STAFF", "description": "Can create POs and mark them received; runs warehouse tasks" },
+      { "name": "ADMIN", "description": "Full platform access" },
+      { "name": "VIEWER", "description": "Read-only access to dashboards and reports" }
+    ]
+  },
+  "clients": [
+    {
+      "clientId": "scm-client",
+      "enabled": true,
+      "publicClient": true,
+      "directAccessGrantsEnabled": true,
+      "standardFlowEnabled": true,
+      "redirectUris": ["http://localhost:8087/*"],
+      "webOrigins": ["*"],
+      "protocol": "openid-connect"
+    }
+  ],
+  "users": [
+    {
+      "username": "procurement.manager",
+      "enabled": true,
+      "email": "procurement.manager@skf-scm.test",
+      "credentials": [{ "type": "password", "value": "changeMe123", "temporary": false }],
+      "realmRoles": ["PROCUREMENT_MANAGER"]
+    },
+    {
+      "username": "warehouse.staff",
+      "enabled": true,
+      "email": "warehouse.staff@skf-scm.test",
+      "credentials": [{ "type": "password", "value": "changeMe123", "temporary": false }],
+      "realmRoles": ["WAREHOUSE_STAFF"]
+    },
+    {
+      "username": "ops.admin",
+      "enabled": true,
+      "email": "ops.admin@skf-scm.test",
+      "credentials": [{ "type": "password", "value": "changeMe123", "temporary": false }],
+      "realmRoles": ["ADMIN"]
+    },
+    {
+      "username": "dashboard.viewer",
+      "enabled": true,
+      "email": "dashboard.viewer@skf-scm.test",
+      "credentials": [{ "type": "password", "value": "changeMe123", "temporary": false }],
+      "realmRoles": ["VIEWER"]
+    }
+  ]
+}

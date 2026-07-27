@@ -1,0 +1,350 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>SCM Dashboard</title>
+<style>
+  body {
+    margin: 0;
+    font-family: Arial, Helvetica, sans-serif;
+    background: #ffffff;
+    color: #222222;
+  }
+  header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 16px 20px;
+    border-bottom: 2px solid #dddddd;
+  }
+  header h1 {
+    font-size: 20px;
+    margin: 0;
+  }
+  header .sub {
+    font-size: 13px;
+    color: #666666;
+    margin-top: 4px;
+  }
+  .login-bar {
+    display: flex;
+    gap: 8px;
+    align-items: center;
+    font-size: 13px;
+  }
+  .login-bar input {
+    padding: 6px 8px;
+    border: 1px solid #cccccc;
+    font-size: 13px;
+    width: 130px;
+  }
+  button {
+    padding: 6px 14px;
+    border: 1px solid #999999;
+    background: #f5f5f5;
+    cursor: pointer;
+    font-size: 13px;
+  }
+  button:hover {
+    background: #e8e8e8;
+  }
+  main {
+    display: grid;
+    grid-template-columns: 320px 1fr;
+    gap: 20px;
+    padding: 20px;
+  }
+  .feed-box {
+    border: 1px solid #dddddd;
+    padding: 14px;
+    max-height: 80vh;
+    overflow-y: auto;
+  }
+  .feed-box h2 {
+    font-size: 15px;
+    margin-top: 0;
+  }
+  .alert {
+    border-bottom: 1px solid #eeeeee;
+    padding: 8px 0;
+    font-size: 13px;
+  }
+  .alert .type {
+    font-weight: bold;
+    font-size: 11px;
+    color: #888888;
+    text-transform: uppercase;
+  }
+  .alert.WARNING .type { color: #b8860b; }
+  .alert.CRITICAL .type { color: #c0392b; }
+  .alert .time {
+    font-size: 11px;
+    color: #999999;
+    margin-top: 2px;
+  }
+  .panels {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 20px;
+  }
+  .panel {
+    border: 1px solid #dddddd;
+    padding: 14px;
+  }
+  .panel h3 {
+    font-size: 15px;
+    margin: 0 0 10px 0;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+  }
+  .panel h3 button {
+    font-size: 11px;
+    padding: 3px 8px;
+  }
+  table {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: 13px;
+  }
+  th {
+    text-align: left;
+    border-bottom: 1px solid #cccccc;
+    padding: 5px 6px;
+    color: #555555;
+  }
+  td {
+    padding: 5px 6px;
+    border-bottom: 1px solid #f0f0f0;
+  }
+  .wh-input {
+    width: 100%;
+    padding: 6px;
+    border: 1px solid #cccccc;
+    font-size: 13px;
+    margin-bottom: 8px;
+  }
+  .empty {
+    color: #999999;
+    font-size: 13px;
+    font-style: italic;
+  }
+  .status-dot {
+    display: inline-block;
+    width: 8px;
+    height: 8px;
+    border-radius: 50%;
+    background: #cccccc;
+    margin-right: 6px;
+  }
+  .status-dot.live {
+    background: #2e8b57;
+  }
+</style>
+</head>
+<body>
+
+<header>
+  <div>
+    <h1>SCM Dashboard</h1>
+    <div class="sub"><span class="status-dot" id="dot"></span><span id="conn-status">connecting...</span></div>
+  </div>
+  <div class="login-bar">
+    <span id="auth-label">not signed in</span>
+    <input id="user" placeholder="username" value="procurement.manager">
+    <input id="pass" placeholder="password" type="password" value="changeMe123">
+    <button onclick="login()">Sign in</button>
+  </div>
+</header>
+
+<main>
+  <div class="feed-box">
+    <h2>Alerts</h2>
+    <div id="feed"></div>
+  </div>
+
+  <div class="panels">
+    <div class="panel">
+      <h3>Inventory <button onclick="loadInventory()">Refresh</button></h3>
+      <input class="wh-input" id="wh-code" placeholder="warehouse code" value="WH-EU-1">
+      <table id="inventory-table"><thead><tr><th>SKU</th><th>Qty</th><th>Threshold</th><th>Status</th></tr></thead><tbody></tbody></table>
+    </div>
+
+    <div class="panel">
+      <h3>Purchase Orders <button onclick="loadPOs()">Refresh</button></h3>
+      <table id="po-table"><thead><tr><th>PO #</th><th>SKU</th><th>Qty</th><th>Status</th></tr></thead><tbody></tbody></table>
+    </div>
+
+    <div class="panel">
+      <h3>Warehouse Tasks <button onclick="loadTasks()">Refresh</button></h3>
+      <table id="task-table"><thead><tr><th>Task</th><th>Type</th><th>SKU</th><th>Status</th></tr></thead><tbody></tbody></table>
+    </div>
+
+    <div class="panel">
+      <h3>Shipments <button onclick="loadShipments()">Refresh</button></h3>
+      <table id="shipment-table"><thead><tr><th>Shipment</th><th>Carrier</th><th>Dest</th><th>Status</th></tr></thead><tbody></tbody></table>
+    </div>
+
+    <div class="panel" style="grid-column: 1 / -1;">
+      <h3>Suppliers <button onclick="loadSuppliers()">Refresh</button></h3>
+      <table id="supplier-table"><thead><tr><th>Code</th><th>Name</th><th>Lead time (days)</th><th>Reliability</th></tr></thead><tbody></tbody></table>
+    </div>
+  </div>
+</main>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/sockjs-client/1.6.1/sockjs.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/stomp.js/2.3.3/stomp.min.js"></script>
+<script>
+  // ---- Config: adjust these if your services run on different hosts/ports ----
+  const SUPPLIER_API = 'http://localhost:8081';
+  const INVENTORY_API = 'http://localhost:8082';
+  const PO_API = 'http://localhost:8083';
+  const NOTIFICATION_API = 'http://localhost:8084';
+  const WAREHOUSE_API = 'http://localhost:8085';
+  const SHIPMENT_API = 'http://localhost:8086';
+  const KEYCLOAK_TOKEN_URL = 'http://localhost:8090/realms/scm-realm/protocol/openid-connect/token';
+
+  let accessToken = null;
+
+  // ---- Auth: Resource Owner Password Credentials grant against Keycloak ----
+  async function login() {
+    const username = document.getElementById('user').value;
+    const password = document.getElementById('pass').value;
+    try {
+      const res = await fetch(KEYCLOAK_TOKEN_URL, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+        body: new URLSearchParams({
+          grant_type: 'password',
+          client_id: 'scm-client',
+          username, password
+        })
+      });
+      if (!res.ok) throw new Error('Login failed: ' + res.status);
+      const data = await res.json();
+      accessToken = data.access_token;
+      document.getElementById('auth-label').textContent = 'signed in as ' + username;
+    } catch (e) {
+      document.getElementById('auth-label').textContent = 'login failed — is Keycloak running?';
+      console.error(e);
+    }
+  }
+
+  function authHeaders() {
+    return accessToken ? { 'Authorization': 'Bearer ' + accessToken } : {};
+  }
+
+  // ---- Live feed via WebSocket (STOMP over SockJS) ----
+  function connectFeed() {
+    const socket = new SockJS(NOTIFICATION_API + '/ws');
+    const client = Stomp.over(socket);
+    client.debug = null;
+    client.connect({}, () => {
+      document.getElementById('dot').classList.add('live');
+      document.getElementById('conn-status').textContent = 'connected';
+      client.subscribe('/topic/alerts', (msg) => {
+        addAlert(JSON.parse(msg.body));
+      });
+    }, () => {
+      document.getElementById('conn-status').textContent = 'disconnected, retrying...';
+      document.getElementById('dot').classList.remove('live');
+      setTimeout(connectFeed, 5000);
+    });
+  }
+
+  function addAlert(evt) {
+    const feed = document.getElementById('feed');
+    const div = document.createElement('div');
+    div.className = 'alert ' + evt.severity;
+    div.innerHTML = `<div class="type">${evt.type}</div><div>${evt.message}</div><div class="time">${new Date(evt.occurredAt).toLocaleTimeString()}</div>`;
+    feed.insertBefore(div, feed.firstChild);
+    while (feed.children.length > 100) feed.removeChild(feed.lastChild);
+  }
+
+  async function loadRecentAlerts() {
+    try {
+      const res = await fetch(NOTIFICATION_API + '/api/v1/notifications?limit=30');
+      const items = await res.json();
+      items.forEach(addAlert);
+    } catch (e) { console.warn('Could not load recent alerts', e); }
+  }
+
+  // ---- Panel loaders ----
+  function rows(tbodyId, data, mapper, emptyMsg) {
+    const tbody = document.querySelector('#' + tbodyId + ' tbody');
+    tbody.innerHTML = '';
+    if (!data || data.length === 0) {
+      tbody.innerHTML = `<tr><td colspan="6" class="empty">${emptyMsg}</td></tr>`;
+      return;
+    }
+    data.forEach(item => {
+      const tr = document.createElement('tr');
+      tr.innerHTML = mapper(item);
+      tbody.appendChild(tr);
+    });
+  }
+
+  async function loadInventory() {
+    const wh = document.getElementById('wh-code').value || 'WH-EU-1';
+    try {
+      const res = await fetch(INVENTORY_API + '/api/v1/inventory/warehouse/' + wh);
+      const data = await res.json();
+      rows('inventory-table', data, i =>
+        `<td>${i.skuCode}</td><td>${i.quantity}</td><td>${i.reorderThreshold}</td><td>${i.belowThreshold ? 'LOW' : 'OK'}</td>`,
+        'No inventory for this warehouse yet — run the seed script.');
+    } catch (e) { console.warn(e); }
+  }
+
+  async function loadPOs() {
+    try {
+      const res = await fetch(PO_API + '/api/v1/purchase-orders', { headers: authHeaders() });
+      const data = await res.json();
+      rows('po-table', data, p =>
+        `<td>${p.poNumber}</td><td>${p.skuCode}</td><td>${p.quantity}</td><td>${p.status}</td>`,
+        'No purchase orders yet.');
+    } catch (e) { console.warn(e); }
+  }
+
+  async function loadTasks() {
+    try {
+      const res = await fetch(WAREHOUSE_API + '/api/v1/warehouse-tasks');
+      const data = await res.json();
+      rows('task-table', data, t =>
+        `<td>${t.taskId}</td><td>${t.taskType}</td><td>${t.skuCode}</td><td>${t.status}</td>`,
+        'No warehouse tasks yet.');
+    } catch (e) { console.warn(e); }
+  }
+
+  async function loadShipments() {
+    try {
+      const res = await fetch(SHIPMENT_API + '/api/v1/shipments');
+      const data = await res.json();
+      rows('shipment-table', data, s =>
+        `<td>${s.shipmentNumber}</td><td>${s.carrier}</td><td>${s.destination}</td><td>${s.status}</td>`,
+        'No shipments yet.');
+    } catch (e) { console.warn(e); }
+  }
+
+  async function loadSuppliers() {
+    try {
+      const res = await fetch(SUPPLIER_API + '/api/v1/suppliers');
+      const data = await res.json();
+      rows('supplier-table', data, s =>
+        `<td>${s.supplierCode}</td><td>${s.name}</td><td>${s.leadTimeDays}</td><td>${s.reliabilityScore}</td>`,
+        'No suppliers yet — run the seed script.');
+    } catch (e) { console.warn(e); }
+  }
+
+  // ---- Init ----
+  connectFeed();
+  loadRecentAlerts();
+  loadInventory();
+  loadPOs();
+  loadTasks();
+  loadShipments();
+  loadSuppliers();
+  setInterval(() => { loadInventory(); loadPOs(); loadTasks(); loadShipments(); }, 15000);
+</script>
+</body>
+</html>
